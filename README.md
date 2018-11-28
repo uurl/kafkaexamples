@@ -1,2 +1,2 @@
-# kafkaexamples
+# Kafka Examples
 Kafka Examples
