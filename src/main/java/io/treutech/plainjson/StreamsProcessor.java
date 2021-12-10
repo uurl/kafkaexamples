@@ -1,13 +1,14 @@
-package com.treutec.customserde;
+package io.treutech.plainjson;
 
-import com.treutec.Constants;
-import com.treutec.Person;
-import com.treutec.custom.PersonSerde;
+import io.treutech.Constants;
+import io.treutech.Person;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.ZoneId;
 import java.util.Properties;
+
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -17,33 +18,39 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+// $ kafka-topics --zookeeper localhost:2181 --create --topic ages --replication-factor 1 --partitions 4
 
 public final class StreamsProcessor {
-  private final Logger logger;
+
   private final String brokers;
 
   public StreamsProcessor(String brokers) {
     super();
     this.brokers = brokers;
-    this.logger = LogManager.getLogger(this.getClass());
   }
 
-  public final void process() {
+  public void process() {
     StreamsBuilder streamsBuilder = new StreamsBuilder();
-    PersonSerde personSerde = new PersonSerde();
-    KStream personStream = streamsBuilder.stream(
-        Constants.getPersonsTopic(), Consumed.with(Serdes.String(), personSerde));
 
-    KStream ageStream = personStream.map((KeyValueMapper) (k, v) -> {
+    KStream<String, String> personJsonStream = streamsBuilder.stream(
+        Constants.getPersonsTopic(), Consumed.with(Serdes.String(), Serdes.String()));
+
+    KStream<String, Person> personStream = personJsonStream.mapValues((v -> {
+      try {
+        return Constants.getJsonMapper().readValue(v, Person.class);
+      } catch (IOException e) {
+        e.printStackTrace();
+        return null;
+      }
+    }));
+
+    KStream<String, String> ageStream = personStream.map((KeyValueMapper) (k, v) -> {
       Person person = (Person) v;
-
-      LocalDate birthDateLocal =
-          person.getBirthDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-      int age = Period.between(birthDateLocal, LocalDate.now()).getYears();
-      logger.debug("Age: " + age);
-      return new KeyValue<>(person.getFirstName() + ' ' + person.getLastName(), String.valueOf(age));
+      LocalDate startDateLocal =
+          person.birthDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+      int age = Period.between(startDateLocal, LocalDate.now()).getYears();
+      return new KeyValue<>(person.firstName + " " + person.lastName, String.valueOf(age));
     });
 
     ageStream.to(Constants.getAgesTopic(), Produced.with(Serdes.String(), Serdes.String()));
@@ -59,3 +66,4 @@ public final class StreamsProcessor {
     (new StreamsProcessor("localhost:9092")).process();
   }
 }
+

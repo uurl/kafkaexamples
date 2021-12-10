@@ -1,7 +1,8 @@
-package com.treutec.customserde;
+package io.treutech.plainjson;
 
-import com.treutec.Constants;
-import com.treutec.Person;
+import io.treutech.Constants;
+import io.treutech.Person;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.Period;
@@ -17,19 +18,23 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 public final class SimpleProcessor {
-  private Consumer<String, Person> consumer;
-  private Producer<String, String> producer;
+  private final Logger logger = LogManager.getLogger(SimpleProducer.class);
+  private final Consumer<String, String> consumer;
+  private final Producer<String, String> producer;
 
   public SimpleProcessor(String brokers) {
     Properties consumerProps = new Properties();
     consumerProps.put("bootstrap.servers", brokers);
     consumerProps.put("group.id", "person-processor");
     consumerProps.put("key.deserializer", StringDeserializer.class);
-    consumerProps.put("value.deserializer", PersonDeserializer.class);
+    consumerProps.put("value.deserializer", StringDeserializer.class);
     consumer = new KafkaConsumer<>(consumerProps);
 
     Properties producerProps = new Properties();
@@ -39,20 +44,30 @@ public final class SimpleProcessor {
     producer = new KafkaProducer<>(producerProps);
   }
 
-  public final void process() {
+  @SuppressWarnings("InfiniteLoopStatement")
+  public void process() {
     consumer.subscribe(Collections.singletonList(Constants.getPersonsTopic()));
 
-    while(true) {
-      ConsumerRecords records = consumer.poll(Duration.ofSeconds(1L));
+    while (true) {
+      ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1L));
 
-      for(Object record : records) {
-        ConsumerRecord it = (ConsumerRecord) record;
-        Person person = (Person) it.value();
+      for(ConsumerRecord<String, String> record : records) {
+        final String personJson = record.value();
+        logger.info("JSON data: " + personJson);
+        Person person = null;
+        try {
+          person = Constants.getJsonMapper().readValue(personJson, Person.class);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        logger.info("Person: " + person);
+        assert person != null;
         LocalDate birthDateLocal =
-            person.getBirthDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            person.birthDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         int age = Period.between(birthDateLocal, LocalDate.now()).getYears();
-        Future future = producer.send(new ProducerRecord<>(
-            Constants.getAgesTopic(), person.getFirstName() + ' ' + person.getLastName(), String.valueOf(age)));
+        Future<RecordMetadata> future = producer.send(new ProducerRecord<>(
+            Constants.getAgesTopic(), person.firstName + ' ' + person.lastName, String.valueOf(age)));
+        logger.info("Age: " + age);
         try {
           future.get();
         } catch (InterruptedException | ExecutionException e) {

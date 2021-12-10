@@ -1,8 +1,8 @@
-package com.treutec.withavro;
+package io.treutech.withavro;
 
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
-import com.treutec.Constants;
-import com.treutec.Person;
+import io.treutech.Constants;
+import io.treutech.Person;
 
 import java.time.LocalDate;
 import java.time.Period;
@@ -10,6 +10,7 @@ import java.time.ZoneId;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Properties;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -19,12 +20,9 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 
 public final class StreamsProcessor {
-  private final Logger logger;
   private final String brokers;
   private final String schemaRegistryUrl;
 
@@ -32,39 +30,30 @@ public final class StreamsProcessor {
     super();
     this.brokers = brokers;
     this.schemaRegistryUrl = schemaRegistryUrl;
-    this.logger = LogManager.getLogger(this.getClass());
   }
 
-  public final void process() {
+  public void process() {
     StreamsBuilder streamsBuilder = new StreamsBuilder();
     GenericAvroSerde avroSerde = new GenericAvroSerde();
 
     avroSerde.configure(
         Collections.singletonMap("schema.registry.url", schemaRegistryUrl), false);
 
-    KStream avroStream = streamsBuilder.stream(
+    KStream<String, GenericRecord> avroStream = streamsBuilder.stream(
         Constants.getPersonsAvroTopic(), Consumed.with(Serdes.String(), avroSerde));
-    
-	  KStream personAvroStream = avroStream.mapValues((v -> {
-	      GenericRecord personAvro = (GenericRecord) v;
-        Person person = new Person(
-            personAvro.get("firstName").toString(),
-            personAvro.get("lastName").toString(),
-            new Date((Long) personAvro.get("birthDate")),
-            personAvro.get("city").toString(),
-            personAvro.get("ipAddress").toString()
-        );
-        logger.debug("Person: " + person);
-        return person;
-    }));
 
-	KStream ageStream = personAvroStream.map((k, v) -> {
-        Person person = (Person) v;
-		LocalDate birthDateLocal = 
-			person.getBirthDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        int age = Period.between(birthDateLocal, LocalDate.now()).getYears();
-        logger.debug("Age: " + age);
-        return new KeyValue<>(person.getFirstName() + ' ' + person.getLastName(), String.valueOf(age));
+    KStream<String, Person> personAvroStream = avroStream.mapValues((v -> new Person(
+        v.get("firstName").toString(),
+        v.get("lastName").toString(),
+        new Date((Long) v.get("birthDate")),
+        v.get("city").toString(),
+        v.get("ipAddress").toString()
+    )));
+
+    KStream<String, String> ageStream = personAvroStream.map((k, v) -> {
+      LocalDate birthDateLocal = v.birthDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+      int age = Period.between(birthDateLocal, LocalDate.now()).getYears();
+      return new KeyValue<>(v.firstName + ' ' + v.lastName, String.valueOf(age));
     });
 
     ageStream.to(Constants.getAgesTopic(), Produced.with(Serdes.String(), Serdes.String()));

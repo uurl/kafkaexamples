@@ -1,9 +1,8 @@
-package com.treutec.plainjson;
+package io.treutech.customserde;
 
-import com.treutec.ConstantsKt;
-import com.treutec.Person;
+import io.treutech.Constants;
+import io.treutech.Person;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.ZoneId;
@@ -18,10 +17,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Produced;
 
-// $ kafka-topics --zookeeper localhost:2181 --create --topic ages --replication-factor 1 --partitions 4
-
 public final class StreamsProcessor {
-
   private final String brokers;
 
   public StreamsProcessor(String brokers) {
@@ -29,30 +25,21 @@ public final class StreamsProcessor {
     this.brokers = brokers;
   }
 
-  public final void process() {
+  public void process() {
     StreamsBuilder streamsBuilder = new StreamsBuilder();
+    PersonSerializer personSerde = new PersonSerializer();
+    KStream<String, String> personStream = streamsBuilder.stream(
+        Constants.getPersonsTopic(), Consumed.with(Serdes.String(), Serdes.String()));
 
-    KStream personJsonStream = streamsBuilder.stream(
-        ConstantsKt.getPersonsTopic(), Consumed.with(Serdes.String(), Serdes.String()));
-
-    KStream personStream = personJsonStream.mapValues((v -> {
-      try {
-        return ConstantsKt.getJsonMapper().readValue((String) v, Person.class);
-      } catch (IOException e) {
-        e.printStackTrace();
-        return null;
-      }
-    }));
-
-    KStream ageStream = personStream.map(((KeyValueMapper) (k, v) -> {
+    KStream<String, String> ageStream = personStream.map((KeyValueMapper) (k, v) -> {
       Person person = (Person) v;
-      LocalDate startDateLocal =
-          person.getBirthDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-      int age = Period.between(startDateLocal, LocalDate.now()).getYears();
-      return new KeyValue<>(person.getFirstName() + " " + person.getLastName(), String.valueOf(age));
-    }));
+      LocalDate birthDateLocal =
+          person.birthDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+      int age = Period.between(birthDateLocal, LocalDate.now()).getYears();
+      return new KeyValue<>(person.firstName + ' ' + person.lastName, String.valueOf(age));
+    });
 
-    ageStream.to(ConstantsKt.getAgesTopic(), Produced.with(Serdes.String(), Serdes.String()));
+    ageStream.to(Constants.getAgesTopic(), Produced.with(Serdes.String(), Serdes.String()));
     Topology topology = streamsBuilder.build();
     Properties props = new Properties();
     props.put("bootstrap.servers", this.brokers);
@@ -65,4 +52,3 @@ public final class StreamsProcessor {
     (new StreamsProcessor("localhost:9092")).process();
   }
 }
-

@@ -1,22 +1,22 @@
-package com.treutec.withavro;
+package io.treutech.withavro;
 
 import com.github.javafaker.Faker;
-import com.treutec.Constants;
-import com.treutec.Person;
+import io.treutech.Constants;
+import io.treutech.Person;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.GenericData.Record;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
+
+import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 public final class SimpleProducer {
@@ -26,9 +26,9 @@ public final class SimpleProducer {
 
   public SimpleProducer(String brokers, String schemaRegistryUrl) {
     Properties props = new Properties();
-    props.put("bootstrap.servers", brokers);
-    props.put("key.serializer", StringSerializer.class);
-    props.put("value.serializer", KafkaAvroSerializer.class);
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
     props.put("schema.registry.url", schemaRegistryUrl);
     producer = new KafkaProducer<>(props);
     try {
@@ -38,7 +38,8 @@ public final class SimpleProducer {
     }
   }
 
-  public final void produce(int ratePerSecond) {
+  @SuppressWarnings("InfiniteLoopStatement")
+  public void produce(int ratePerSecond) {
     long waitTimeBetweenIterationsMs = 1000L / (long)ratePerSecond;
     Faker faker = new Faker();
 
@@ -50,11 +51,14 @@ public final class SimpleProducer {
           faker.address().city(),
           faker.internet().ipV4Address());
       GenericRecordBuilder recordBuilder = new GenericRecordBuilder(schema);
-      recordBuilder.set("firstName", fakePerson.getFirstName());
-      recordBuilder.set("lastName", fakePerson.getLastName());
-      recordBuilder.set("birthDate", fakePerson.getBirthDate().getTime());
+      recordBuilder.set("firstName", fakePerson.firstName);
+      recordBuilder.set("lastName", fakePerson.lastName);
+      recordBuilder.set("birthDate", fakePerson.birthDate.getTime());
+      recordBuilder.set("city", fakePerson.city);
+      recordBuilder.set("ipAddress", fakePerson.ipAddress);
       Record avroPerson = recordBuilder.build();
-      Future futureResult = producer.send(new ProducerRecord<>(Constants.getPersonsAvroTopic(), avroPerson));
+      Future<RecordMetadata> futureResult =
+          producer.send(new ProducerRecord<>(Constants.getPersonsAvroTopic(), avroPerson));
       try {
         Thread.sleep(waitTimeBetweenIterationsMs);
         futureResult.get();
@@ -67,4 +71,5 @@ public final class SimpleProducer {
   public static void main( String[] args) {
     new SimpleProducer("localhost:9092", "http://localhost:8081").produce(2);
   }
+
 }

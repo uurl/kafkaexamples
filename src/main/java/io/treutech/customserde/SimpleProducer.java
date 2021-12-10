@@ -1,14 +1,14 @@
-package com.treutec.customserde;
+package io.treutech.customserde;
 
 import com.github.javafaker.Faker;
-import com.treutec.Constants;
-import com.treutec.Person;
+import io.treutech.Constants;
+import io.treutech.Person;
+
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
+
+import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 public final class SimpleProducer {
@@ -16,24 +16,26 @@ public final class SimpleProducer {
 
   public SimpleProducer(String brokers) {
     Properties props = new Properties();
-    props.put("bootstrap.servers", brokers);
-    props.put("key.serializer", StringSerializer.class);
-    props.put("value.serializer", PersonSerializer.class);
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, PersonSerializer.class);
     producer = new KafkaProducer<>(props);
   }
 
+  @SuppressWarnings("InfiniteLoopStatement")
   public void produce(int ratePerSecond) {
-    long waitTimeBetweenIterationsMs = 1000L / (long)ratePerSecond;
+    long waitTimeBetweenIterationsMs = 1000L / (long) ratePerSecond;
     Faker faker = new Faker();
 
-    while(true) {
+    while (true) {
       Person fakePerson = new Person(
           faker.name().firstName(),
           faker.name().lastName(),
           faker.date().birthday(),
           faker.address().city(),
           faker.internet().ipV4Address());
-      Future futureResult = producer.send(new ProducerRecord<>(Constants.getPersonsTopic(), fakePerson));
+      Future<RecordMetadata> futureResult =
+          producer.send(new ProducerRecord<>(Constants.getPersonsTopic(), fakePerson));
       try {
         Thread.sleep(waitTimeBetweenIterationsMs);
         futureResult.get();

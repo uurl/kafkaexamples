@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "Person",
-  "namespace": "com.ippontech.kafkatutorials",
+  "namespace": "io.treutech.kafkaexamples",
   "fields": [
     {
       "name": "firstName",

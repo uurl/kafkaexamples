@@ -1,14 +1,16 @@
-package com.treutec.customserde;
+package io.treutech.customserde;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.treutec.Constants;
+import io.treutech.Constants;
 import java.util.Map;
+
+import io.treutech.Person;
 import org.apache.kafka.common.serialization.Serializer;
 
-public final class PersonSerializer implements Serializer {
+public final class PersonSerializer implements Serializer<Person> {
 
   @Override
-  public byte[] serialize(String topic, Object data) {
+  public byte[] serialize(String topic, Person data) {
     if (data == null) {
       return null;
     }

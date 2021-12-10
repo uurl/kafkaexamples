@@ -1,12 +1,12 @@
-package com.treutec.customserde;
+package io.treutech.customserde;
 
-import com.treutec.Constants;
-import com.treutec.Person;
+import io.treutech.Constants;
+import io.treutech.Person;
 import java.io.IOException;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 
-public final class PersonDeserializer implements Deserializer {
+public final class PersonDeserializer implements Deserializer<Person> {
 
   @Override
   public Person deserialize(String topic, byte[] data) {
