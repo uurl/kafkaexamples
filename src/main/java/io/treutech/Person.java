@@ -1,15 +1,17 @@
 package io.treutech;
 
+import java.io.Serializable;
 import java.util.Date;
 
-public final class Person {
+public final class Person implements Serializable {
   public String firstName;
   public String lastName;
   public Date birthDate;
   public String city;
   public String ipAddress;
 
-  public Person() {}
+  public Person() {
+  }
 
   public Person(final String firstName,
                 final String lastName,

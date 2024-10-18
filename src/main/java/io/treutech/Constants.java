@@ -9,7 +9,7 @@ public final class Constants {
   private static final ObjectMapper jsonMapper;
 
   static {
-    ObjectMapper mapper = new ObjectMapper();
+    final ObjectMapper mapper = new ObjectMapper();
     mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     mapper.setDateFormat(new StdDateFormat());
     jsonMapper = mapper;
